@@ -1,5 +1,7 @@
 var mysql = require("mysql");
 var inquirer = require("inquirer");
+var prompt = require("prompt");
+var colors = require("colors");
 
 var connection = mysql.createConnection({
   host: "localhost",
@@ -13,171 +15,56 @@ var connection = mysql.createConnection({
   database: "bamazon_db"
 });
 
-connection.connect(function(err) {
-  if (err) throw err;
-  runSearch();
-});
-
-function runSearch() {
-  inquirer
-    .prompt({
-      name: "action",
-      type: "list",
-      message: "What would you like to do?",
-      choices: [
-        "Find songs by artist",
-        "Find all artists who appear more than once",
-        "Find data within a specific range",
-        "Search for a specific song"
-      ]
-    })
-    .then(function(answer) {
-      switch (answer.action) {
-        case "Find songs by artist":
-          artistSearch();
-          break;
-
-        case "Find all artists who appear more than once":
-          multiSearch();
-          break;
-
-        case "Find data within a specific range":
-          rangeSearch();
-          break;
-
-        case "Search for a specific song":
-          songSearch();
-          break;
-        case "Search for range of songs and albums":
-        songandalbumsearch();
-          break;
-      }
-    });
-}
-
-function artistSearch() {
-  inquirer
-    .prompt({
-      name: "artist",
-      type: "input",
-      message: "What artist would you like to search for?"
-    })
-    .then(function(answer) {
-      var query = "SELECT position, song, year FROM top5000 WHERE ?";
-      connection.query(query, { artist: answer.artist }, function(err, res) {
-        for (var i = 0; i < res.length; i++) {
-          console.log("Position: " + res[i].position + " || Song: " + res[i].song + " || Year: " + res[i].year);
-        }
-        runSearch();
-      });
-    });
-}
-
-function multiSearch() {
-  var query = "SELECT artist FROM top5000 GROUP BY artist HAVING count(*) > 1";
-  connection.query(query, function(err, res) {
-    for (var i = 0; i < res.length; i++) {
-      console.log(res[i].artist);
-    }
-    runSearch();
-  });
-}
-
-function rangeSearch() {
-  inquirer
-    .prompt([
-      {
-        name: "start",
-        type: "input",
-        message: "Enter starting position: ",
-        validate: function(value) {
-          if (isNaN(value) === false) {
-            return true;
+function showInventory() {
+     connection.query('SELECT * FROM products', function(err, inventory) {
+      if (err) throw err;
+               console.log("Current Inventory");
+               for(var i = 0; i < inventory.length; i++) {
+            console.log("Item ID: " + inventory[i].item_id + " | Product: " + inventory[i].product_name + " | Department: " + inventory[i].department_name + " | Price: " +  inventory[i].price);
           }
-          return false;
-        }
-      },
-      {
-        name: "end",
-        type: "input",
-        message: "Enter ending position: ",
-        validate: function(value) {
-          if (isNaN(value) === false) {
-            return true;
-          }
-          return false;
-        }
-      }
-    ])
-    .then(function(answer) {
-      var query = "SELECT position,song,artist,year FROM top5000 WHERE position BETWEEN ? AND ?";
-      connection.query(query, [answer.start, answer.end], function(err, res) {
-        for (var i = 0; i < res.length; i++) {
-          console.log(
-            "Position: " +
-              res[i].position +
-              " || Song: " +
-              res[i].song +
-              " || Artist: " +
-              res[i].artist +
-              " || Year: " +
-              res[i].year
-          );
-        }
-        runSearch();
-      });
-    });
+
+          inquirer.prompt([
+
+            
+            {
+              type: "input",
+              message: "What is the id of the item you would like to purchase?",
+              name: "id"
+            },
+
+               {
+              type: "input",
+              message: "How many would you like?",
+              name: "quantity"
+            }
+
+          ]).then(function (order) {
+            
+                    var quantity = order.quantity;
+                    var item_id = order.id;
+                    connection.query('SELECT * FROM products WHERE item_id=' + item_id, function(err, selectedItem) {
+                      if (err) throw err;
+                         if (selectedItem[0].stock_quantity - quantity >= 0) {
+                              console.log("That item is in stock. (".green + selectedItem[0].product_name.green + ")!".green);
+                              console.log("Quantity in Stock: ".green + selectedItem[0].stock_quantity + " Order Quantity: ".green + quantity);
+                              console.log("You will be charged ".green + (order.quantity * selectedItem[0].price) +  " dollars.  Thank you for your order.".green);
+                              
+                              connection.query('UPDATE products SET stock_quantity=? WHERE item_id=?', [selectedItem[0].stock_quantity - quantity, item_id],
+                              function(err, inventory) {
+                                if (err) throw err;
+                                  
+                                   showInventory();
+                              });  
+
+                         }
+
+                         else {
+                              console.log("Insufficient quantity.  Please order less of that item, as Bamazon only has ".red + selectedItem[0].stock_quantity + " " + selectedItem[0].product_name.red + " in stock at this moment.".red);
+                              showInventory();
+                         }
+                    });
+          });
+     });
 }
 
-function songSearch() {
-  inquirer
-    .prompt({
-      name: "song",
-      type: "input",
-      message: "What song would you like to look for?"
-    })
-    .then(function(answer) {
-      console.log(answer.song);
-      connection.query("SELECT * FROM top5000 WHERE ?", { song: answer.song }, function(err, res) {
-        console.log(
-          "Position: " +
-            res[0].position +
-            " || Song: " +
-            res[0].song +
-            " || Artist: " +
-            res[0].artist +
-            " || Year: " +
-            res[0].year
-        );
-        runSearch();
-      });
-    });
-}
-
-inquirer
-    .prompt({
-      name: "years",
-      type: "rawlist",
-      message: "What year range?",
-      choices: ["1935 - 1955, 1956 - 1985, 1986 - 2014"]
-    })
-    .then(function(answer) {
-      console.log(answer.song);
-    });
-
-
-function songandalbumsearch() {
-var query = `SELECT top5000.artist, top5000.year, song, album FROM top5000 INNER JOIN topalbums5000 ON top5000.artist = topalbums5000.artist WHERE top5000.year = topalbums5000.year WHERE top5000.year BETWEEN ? and ?`;
-connection.query("SELECT * FROM top5000 WHERE ?", { year: answer.year }, function(err, res) {
-  console.log(
-          
-            "Song: " +
-            res[0].song +
-            " || Artist: " +
-            res[0].artist +
-            " || Year: " +
-            res[0].year
-        );
-        runSearch();
-  })
-};
+showInventory();

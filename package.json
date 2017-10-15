@@ -9,7 +9,9 @@
   "author": "Ash Rotman",
   "license": "ISC",
   "dependencies": {
+    "colors": "^1.1.2",
     "inquirer": "^3.3.0",
-    "mysql": "^2.15.0"
+    "mysql": "^2.15.0",
+    "prompt": "^1.0.0"
   }
 }
